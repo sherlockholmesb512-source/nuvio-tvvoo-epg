@@ -87,12 +87,13 @@ async function buildNowList() {
       if (endStr) parts.push(`Fino alle ${endStr}`);
       if (epg.next && epg.next.title) parts.push(`PROSSIMO: ${epg.next.title}${endStr ? '' : endStr}`);
       const prefix = prov === 'pluto' ? fast.PLUTO_PREFIX : prov === 'samsung' ? fast.SAMSUNG_PREFIX : fast.RAKUTEN_PREFIX;
+      const progImg = epg.current.imageIso || null;
       out.push({
         id: `${NOW_PREFIX}:${fast.b64uEnc(`${prefix}:${ch.id}`)}`,
         type: 'tv',
         name: epg.current.title,
-        poster: ch.art || ch.logo || NOW_FALL('300x450'),
-        background: ch.art || ch.logo || NOW_FALL('1280x720'),
+        poster: progImg || ch.art || ch.logo || NOW_FALL('300x450'),
+        background: progImg || ch.art || ch.logo || NOW_FALL('1280x720'),
         logo: ch.logo || undefined,
         description: parts.join('\n'),
         genres: [nowGenre(ch.group)],
