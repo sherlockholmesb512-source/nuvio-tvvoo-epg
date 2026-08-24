@@ -217,16 +217,30 @@ async function handleRequest(req, res) {
         metas = await sport.catalogMetas(search);
       } else {
         metas = await catalogs.getCatalogMetas(genre, search);
-        if (/documentari/i.test(String(genre || ''))) {
+        const g = String(genre || '');
+        const mergeExtra = (lists) => {
+          const seen = new Set(metas.map(m => m.id));
+          for (const m of lists.flat()) {
+            if (!seen.has(m.id)) { metas.push(m); seen.add(m.id); }
+          }
+        };
+        if (/documentari/i.test(g)) {
           const [samDoc, rakDoc, pluDoc] = await Promise.all([
             fast.catalogMetas('samsung', 'Documentari', search),
             fast.catalogMetas('rakuten', 'Documentari', search),
             fast.catalogMetas('pluto', 'Documentari', search)
           ]);
-          const seen = new Set(metas.map(m => m.id));
-          for (const m of [...(samDoc || []), ...(rakDoc || []), ...(pluDoc || [])]) {
-            if (!seen.has(m.id)) { metas.push(m); seen.add(m.id); }
-          }
+          mergeExtra([samDoc, rakDoc, pluDoc]);
+        }
+        if (/bambini|kids|cartoon|junior/i.test(g)) {
+          const [pluAnim, pluBam, samAnim, samBam, rakBam] = await Promise.all([
+            fast.catalogMetas('pluto', 'Animazione', search),
+            fast.catalogMetas('pluto', 'Bambini', search),
+            fast.catalogMetas('samsung', 'Anime', search),
+            fast.catalogMetas('samsung', 'Bambini', search),
+            fast.catalogMetas('rakuten', 'Bambini', search)
+          ]);
+          mergeExtra([pluAnim, pluBam, samAnim, samBam, rakBam]);
         }
       }
       if (skip > 0 && Array.isArray(metas)) {
