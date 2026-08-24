@@ -29,8 +29,8 @@ const fast = require('../lib/fast');
   ok('meta descr epg', /IN ONDA ORA/.test(meta.description));
 
   const st = (await fast.fastStreams(p0))[0];
-  ok('stream url pluto stitcher', /service-stitcher\.clusters\.pluto\.tv/.test(st.url));
-  ok('stream url params', /deviceDNT=/.test(st.url) && /appVersion=/.test(st.url));
+  ok('stream url pluto stitcher v2', /cfd-v4-service-channel-stitcher[^/]+\.pluto\.tv\/v2\/stitch/.test(st.url));
+  ok('stream url jwt', /jwt=/.test(st.url) && /masterJWTPassthrough=true/.test(st.url));
   console.log('pluto stream url ok');
 
   const s0 = samsung[0];
