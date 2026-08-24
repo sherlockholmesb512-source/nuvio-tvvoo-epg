@@ -277,6 +277,8 @@ async function handleRequest(req, res) {
       try { up = fast.b64uDec(segments[1]); } catch (e) { return sendError(res, 400, 'bad token'); }
       if (!/^https:\/\//i.test(up)) return sendError(res, 400, 'bad upstream');
       const isPlaylistUp = /\.m3u8(\?|$)/i.test(up);
+      let isPlutoUp = false;
+      try { isPlutoUp = /(^|\.)pluto\.tv$/i.test(new URL(up).host); } catch (e) { /* noop */ }
       let isPlutoPlaylist = false;
       try { isPlutoPlaylist = isPlaylistUp && /(^|\.)pluto\.tv$/i.test(new URL(up).host); } catch (e) { /* noop */ }
       const proto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
@@ -293,7 +295,10 @@ async function handleRequest(req, res) {
             r = await fetchWithTimeout(up, { headers: fwdHeaders }, 30000);
           }
           if (!r.ok && r.status !== 206) {
-            if (attempt < 3 && isPlutoPlaylist) { await new Promise(z => setTimeout(z, 800)); continue; }
+            if (attempt < 3 && (isPlutoPlaylist || (isPlutoUp && r.status >= 500))) {
+              await new Promise(z => setTimeout(z, 800));
+              continue;
+            }
             return sendError(res, 502, `upstream ${r.status}`);
           }
           if (isPlaylistUp || /mpegurl/i.test(r.headers.get('content-type') || '')) {
