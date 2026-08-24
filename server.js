@@ -207,6 +207,16 @@ async function handleRequest(req, res) {
         metas = await sport.catalogMetas(search);
       } else {
         metas = await catalogs.getCatalogMetas(genre, search);
+        if (/documentari/i.test(String(genre || ''))) {
+          const [samDoc, rakDoc] = await Promise.all([
+            fast.catalogMetas('samsung', 'Documentari', search),
+            fast.catalogMetas('rakuten', 'Documentari', search)
+          ]);
+          const seen = new Set(metas.map(m => m.id));
+          for (const m of [...(samDoc || []), ...(rakDoc || [])]) {
+            if (!seen.has(m.id)) { metas.push(m); seen.add(m.id); }
+          }
+        }
       }
       if (skip > 0 && Array.isArray(metas)) {
         metas = metas.slice(skip);
