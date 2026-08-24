@@ -615,6 +615,18 @@ server.listen(PORT, HOST, () => {
       if (r.ok) console.log('[keepalive] ok');
     }).catch(() => {});
   }, 10 * 60 * 1000).unref();
+
+  setInterval(() => {
+    try {
+      fast.flushDataCaches();
+      catalogs.flushDataCaches();
+      guidatv.flushDataCaches();
+      m3u.flushDataCaches();
+      nowListCache = { at: 0, list: null };
+      console.log('[cache] flushed all data caches');
+      buildNowList().then(l => console.log('[cache] warm now list: ' + l.length)).catch(() => {});
+    } catch (e) { /* noop */ }
+  }, 15 * 60 * 1000).unref();
 });
 
 process.on('uncaughtException', (err) => {
