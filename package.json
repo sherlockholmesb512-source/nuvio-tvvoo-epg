@@ -1,0 +1,13 @@
+{
+  "name": "nuvio-tvvoo-epg",
+  "version": "1.0.0",
+  "description": "Standalone Nuvio/Stremio addon: Italian VAVOO live TV channels with real-time EPG from GuidaTV (now playing, start/end times, next program, Sky categories).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TvVoo Guide • Italia — Nuvio / Stremio Addon</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 20% -10%, #1c2a4a 0%, #0b1020 55%, #070a14 100%);
+    color: #e8ecf5;
+    display: flex; align-items: center; justify-content: center; padding: 32px 16px;
+  }
+  .card {
+    width: 100%; max-width: 720px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 18px; padding: 36px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+  }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .3px; }
+  h1 span { background: linear-gradient(90deg,#7fb2ff,#b57bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p.sub { margin: 0 0 26px; color: #9aa7bd; font-size: 14px; line-height: 1.55; }
+  .row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  input[type=text] {
+    flex: 1 1 340px; padding: 13px 14px; border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.35);
+    color: #e8ecf5; font-size: 14px; outline: none;
+  }
+  input[type=text]:focus { border-color: #7fb2ff; }
+  button {
+    padding: 13px 20px; border-radius: 10px; border: none; cursor: pointer;
+    font-weight: 700; font-size: 14px; color: #08101f;
+    background: linear-gradient(90deg,#8fc1ff,#c39bff);
+  }
+  button:hover { filter: brightness(1.08); }
+  ul.features { margin: 22px 0 6px; padding-left: 20px; color: #aab6cc; font-size: 13.5px; line-height: 1.8; }
+  .steps { margin-top: 24px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 20px; }
+  .steps ol { color: #aab6cc; font-size: 13.5px; line-height: 1.9; padding-left: 20px; margin: 8px 0 0; }
+  code.inline { background: rgba(127,178,255,.12); border-radius: 5px; padding: 1px 6px; font-size: 12.5px; }
+  footer { margin-top: 26px; color: #66748e; font-size: 11.5px; line-height: 1.6; }
+  a { color: #8fc1ff; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📺 TvVoo Guide <span>• Italia</span></h1>
+  <p class="sub">Addon autonomo per <strong>Nuvio</strong> e <strong>Stremio</strong>: canali TV italiani con guida in tempo reale da GuidaTV — programma in onda ora, orario di inizio e fine, e programma successivo. Categorie Sky (Intrattenimento, Sport, Cinema, Documentari, News, Bambini, Musica) incluse.</p>
+
+  <div class="row">
+    <input id="murl" type="text" readonly value="%MANIFEST_URL%">
+    <button onclick="copyUrl()">Copia URL</button>
+  </div>
+
+  <div class="steps">
+    <strong>Come installare in Nuvio</strong>
+    <ol>
+      <li>Apri <strong>Nuvio → Impostazioni → Addons</strong></li>
+      <li>Tocca <strong>Add Addon</strong> e incolla l'URL del manifest qui sopra</li>
+      <li>Tocca <strong>Install</strong>: il catalogo <em>"TvVoo • Ora in TV"</em> apparirà nella home</li>
+      <li>Usa il filtro <strong>Genere</strong> per sfogliare: Digitale Terrestre, Sky Sport, Sky Cinema, Sky Intrattenimento, Sky Documentari, Sky News, Sky Bambini, Sky Musica</li>
+      <li>Scegli un canale per vedere <strong>cosa va in onda ora</strong>, gli orari e il prossimo programma, poi premi play</li>
+    </ol>
+  </div>
+
+  <ul class="features">
+    <li>🔴 Programma <strong>in onda ora</strong> con orario di inizio e fine</li>
+    <li>⏭️ <strong>Programma successivo</strong> sempre visibile nella descrizione del canale</li>
+    <li>🗂️ Categorie: DTT + Sky Intrattenimento/Sport/Cinema/Documentari/News/Bambini/Musica</li>
+    <li>📡 Stream HLS puliti risolti con il tuo IP (nessuna API key richiesta)</li>
+  </ul>
+
+  <footer>
+    Progetto indipendente non affiliato a VAVOO, Sky, Rai o Mediaset. I canali non sono generati né ospitati da questo progetto: provengono da scraping automatico di fonti pubbliche terze. Verifica la conformità alle leggi del tuo paese prima dell'uso.
+  </footer>
+</div>
+<script>
+function copyUrl() {
+  const el = document.getElementById('murl');
+  el.select();
+  navigator.clipboard.writeText(el.value).then(() => {
+    const b = event.target;
+    const old = b.textContent;
+    b.textContent = '✓ Copiato!';
+    setTimeout(() => b.textContent = old, 1600);
+  });
+}
+</script>
+</body>
+</html>
