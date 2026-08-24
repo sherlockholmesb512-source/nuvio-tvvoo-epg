@@ -276,11 +276,14 @@ async function handleRequest(req, res) {
       let up;
       try { up = fast.b64uDec(segments[1]); } catch (e) { return sendError(res, 400, 'bad token'); }
       if (!/^https:\/\//i.test(up)) return sendError(res, 400, 'bad upstream');
-      const r = await fetchWithTimeout(up, {}, 30000);
-      if (!r.ok) return sendError(res, 502, `upstream ${r.status}`);
+      const isPlaylistUp = /\.m3u8(\?|$)/i.test(up);
+      const fwdHeaders = {};
+      if (req.headers.range && !isPlaylistUp) fwdHeaders.range = req.headers.range;
+      const r = await fetchWithTimeout(up, { headers: fwdHeaders }, 30000);
+      if (!r.ok && r.status !== 206) return sendError(res, 502, `upstream ${r.status}`);
       const proto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
       const base = `${proto}://${req.headers.host}`;
-      const isPlaylist = /\.m3u8(\?|$)/i.test(up) || /mpegurl/i.test(r.headers.get('content-type') || '');
+      const isPlaylist = isPlaylistUp || /mpegurl/i.test(r.headers.get('content-type') || '');
       if (isPlaylist) {
         const txt = await r.text();
         res.writeHead(200, {
@@ -291,12 +294,18 @@ async function handleRequest(req, res) {
         return res.end(fast.rewriteM3U8(txt, up, base));
       }
       const buf = Buffer.from(await r.arrayBuffer());
-      res.writeHead(200, {
+      const hdrs = {
         'Content-Type': r.headers.get('content-type') || 'application/octet-stream',
         'Cache-Control': r.headers.get('cache-control') || 'no-store',
-        'Access-Control-Allow-Origin': '*'
-      });
-      return res.end(buf);
+        'Access-Control-Allow-Origin': '*',
+        'Accept-Ranges': 'bytes',
+        'Content-Length': String(buf.length)
+      };
+      if (r.status === 206) {
+        hdrs['Content-Range'] = r.headers.get('content-range') || `bytes 0-${buf.length - 1}/*`;
+      }
+      res.writeHead(r.status === 206 ? 206 : 200, hdrs);
+      return res.end(req.method === 'HEAD' ? undefined : buf);
     }
 
     sendError(res, 404, 'not found');
@@ -311,6 +320,12 @@ const server = http.createServer(handleRequest);
 server.listen(PORT, HOST, () => {
   console.log(`TvVoo Guide addon listening on http://${HOST}:${PORT}`);
   console.log(`Manifest: http://localhost:${PORT}/manifest.json`);
+  const SELF = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  setInterval(() => {
+    fetch(SELF + '/health').then(r => {
+      if (r.ok) console.log('[keepalive] ok');
+    }).catch(() => {});
+  }, 10 * 60 * 1000).unref();
 });
 
 process.on('uncaughtException', (err) => {
