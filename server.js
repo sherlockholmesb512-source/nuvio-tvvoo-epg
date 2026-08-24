@@ -277,14 +277,15 @@ async function handleRequest(req, res) {
       try { up = fast.b64uDec(segments[1]); } catch (e) { return sendError(res, 400, 'bad token'); }
       if (!/^https:\/\//i.test(up)) return sendError(res, 400, 'bad upstream');
       const isPlaylistUp = /\.m3u8(\?|$)/i.test(up);
-      const isStitcherMaster = isPlaylistUp && /\/stitch\/hls\/channel\/[^/]+\/master\.m3u8/i.test(up);
+      let isPlutoPlaylist = false;
+      try { isPlutoPlaylist = isPlaylistUp && /(^|\.)pluto\.tv$/i.test(new URL(up).host); } catch (e) { /* noop */ }
       const proto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
       const base = `${proto}://${req.headers.host}`;
 
       const fetchPlaylist = async () => {
         for (let attempt = 1; attempt <= 3; attempt++) {
           let r;
-          if (isStitcherMaster) {
+          if (isPlutoPlaylist) {
             r = await ppMutex(() => fetchWithTimeout(up, {}, 30000));
           } else {
             const fwdHeaders = {};
@@ -292,13 +293,13 @@ async function handleRequest(req, res) {
             r = await fetchWithTimeout(up, { headers: fwdHeaders }, 30000);
           }
           if (!r.ok && r.status !== 206) {
-            if (attempt < 3 && isStitcherMaster) { await new Promise(z => setTimeout(z, 800)); continue; }
+            if (attempt < 3 && isPlutoPlaylist) { await new Promise(z => setTimeout(z, 800)); continue; }
             return sendError(res, 502, `upstream ${r.status}`);
           }
           if (isPlaylistUp || /mpegurl/i.test(r.headers.get('content-type') || '')) {
             const txt = await r.text();
             if (!txt.startsWith('#EXTM3U')) {
-              if (attempt < 3 && isStitcherMaster) { await new Promise(z => setTimeout(z, 900)); continue; }
+              if (attempt < 3 && isPlutoPlaylist) { await new Promise(z => setTimeout(z, 900)); continue; }
               return sendError(res, 502, 'upstream bad playlist');
             }
             res.writeHead(200, {
@@ -361,3 +362,4 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   try { console.error('[unhandledRejection]', reason); } catch (e) { /* noop */ }
 });
+
