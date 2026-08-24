@@ -25,7 +25,7 @@ function nowNorm(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 }
 
-const NOW_GENRES = ['Tutti', 'Film', 'Serie TV', 'Sport', 'Documentari', 'Bambini', 'Intrattenimento', 'News', 'Musica', 'Altro'];
+const NOW_GENRES = ['Tutti', 'Sky', 'Film', 'Serie TV', 'Sport', 'Documentari', 'Bambini', 'Intrattenimento', 'News', 'Musica', 'Altro'];
 function nowGenre(s) {
   const t = String(s || '').toLowerCase();
   if (/film|cinema|movie/.test(t)) return 'Film';
@@ -39,8 +39,14 @@ function nowGenre(s) {
   return 'Altro';
 }
 
+const NOW_TTL = 5 * 60 * 1000;
+let nowListCache = { at: 0, list: null };
+
 async function buildNowList() {
+  const t = Date.now();
+  if (nowListCache.list && t - nowListCache.at < NOW_TTL) return nowListCache.list;
   const { fmtRome } = require('./lib/util');
+
   const out = [];
   const seenTitle = new Set();
 
@@ -57,6 +63,8 @@ async function buildNowList() {
       if (c.epg.next && c.epg.next.title) {
         parts.push(`PROSSIMO: ${c.epg.next.title}${c.epg.next.start ? ' (' + fmtRome(c.epg.next.start) + ')' : ''}`);
       }
+      const genres = [nowGenre(cur.category)];
+      if (/\bsky\b/i.test(c.name)) genres.push('Sky');
       out.push({
         id: `${NOW_PREFIX}:${fast.b64uEnc(catalogs.idFromName(c.name))}`,
         type: 'tv',
@@ -65,7 +73,7 @@ async function buildNowList() {
         background: cur.image || c.logo || NOW_FALL('1280x720'),
         logo: c.logo || undefined,
         description: parts.join('\n'),
-        genres: [nowGenre(cur.category)],
+        genres,
         behaviorHints: { defaultsRecommended: true }
       });
     }
@@ -88,6 +96,8 @@ async function buildNowList() {
       if (epg.next && epg.next.title) parts.push(`PROSSIMO: ${epg.next.title}${endStr ? '' : endStr}`);
       const prefix = prov === 'pluto' ? fast.PLUTO_PREFIX : prov === 'samsung' ? fast.SAMSUNG_PREFIX : fast.RAKUTEN_PREFIX;
       const progImg = epg.current.imageIso || null;
+      const genres = [nowGenre(ch.group)];
+      if (/\bsky\b/i.test(ch.name)) genres.push('Sky');
       out.push({
         id: `${NOW_PREFIX}:${fast.b64uEnc(`${prefix}:${ch.id}`)}`,
         type: 'tv',
@@ -96,7 +106,7 @@ async function buildNowList() {
         background: progImg || ch.art || ch.logo || NOW_FALL('1280x720'),
         logo: ch.logo || undefined,
         description: parts.join('\n'),
-        genres: [nowGenre(ch.group)],
+        genres,
         posterShape: prov === 'rakuten' ? 'poster' : 'square',
         behaviorHints: { defaultsRecommended: true }
       });
@@ -104,7 +114,9 @@ async function buildNowList() {
   }
 
   out.sort((a, b) => a.name.localeCompare(b.name, 'it'));
-  return out.slice(0, 300);
+  const capped = out.slice(0, 300);
+  nowListCache = { at: Date.now(), list: capped };
+  return capped;
 }
 
 async function buildNowMetas(search) {
