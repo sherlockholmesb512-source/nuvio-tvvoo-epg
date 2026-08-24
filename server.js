@@ -19,6 +19,95 @@ const ADDON_ID = 'community.tvvooguide.nuvio';
 
 const CONFIGURE_HTML = fs.readFileSync(path.join(__dirname, 'public', 'configure.html'), 'utf8');
 
+const NOW_PREFIX = 'nowp';
+const NOW_FALL = sz => `https://placehold.co/${sz}/10182e/8fc1ff.png?text=TV`;
+function nowNorm(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+}
+
+async function buildNowList() {
+  const { fmtRome } = require('./lib/util');
+  const out = [];
+  const seenTitle = new Set();
+
+  try {
+    const uni = await catalogs.buildUniverse();
+    for (const c of uni.channels) {
+      const cur = c.epg && c.epg.current;
+      if (!cur || !cur.title) continue;
+      const k = nowNorm(cur.title);
+      if (!k || seenTitle.has(k)) continue;
+      seenTitle.add(k);
+      const parts = [`In onda su ${c.name}`];
+      if (cur.end) parts.push(`Fino alle ${fmtRome(cur.end)}`);
+      if (c.epg.next && c.epg.next.title) {
+        parts.push(`PROSSIMO: ${c.epg.next.title}${c.epg.next.start ? ' (' + fmtRome(c.epg.next.start) + ')' : ''}`);
+      }
+      out.push({
+        id: `${NOW_PREFIX}:${fast.b64uEnc(catalogs.idFromName(c.name))}`,
+        type: 'tv',
+        name: cur.title,
+        poster: cur.image || c.logo || NOW_FALL('300x450'),
+        background: cur.image || c.logo || NOW_FALL('1280x720'),
+        logo: c.logo || undefined,
+        description: parts.join('\n'),
+        genres: cur.category ? [cur.category] : [],
+        behaviorHints: { defaultsRecommended: true }
+      });
+    }
+  } catch (e) { /* opzionale */ }
+
+  for (const [prov, load] of [['pluto', fast.loadPluto], ['samsung', fast.loadSamsung], ['rakuten', fast.loadRakuten]]) {
+    let chans = [];
+    try { chans = await load(); } catch (e) { continue; }
+    for (const ch of chans) {
+      let epg;
+      try { epg = await fast.chEpg(ch); } catch (e) { continue; }
+      if (!epg.current || !epg.current.title) continue;
+      const k = nowNorm(epg.current.title);
+      if (!k || seenTitle.has(k)) continue;
+      seenTitle.add(k);
+      const when = p => (!p ? '' : typeof p.start === 'number' ? fast.fmtEpoch(p.start) : String(fmtRome(p.startIso || p.start) || ''));
+      const parts = [`In onda su ${ch.name}`];
+      const endStr = epg.next ? when(epg.next) : '';
+      if (endStr) parts.push(`Fino alle ${endStr}`);
+      if (epg.next && epg.next.title) parts.push(`PROSSIMO: ${epg.next.title}${endStr ? '' : endStr}`);
+      const prefix = prov === 'pluto' ? fast.PLUTO_PREFIX : prov === 'samsung' ? fast.SAMSUNG_PREFIX : fast.RAKUTEN_PREFIX;
+      out.push({
+        id: `${NOW_PREFIX}:${fast.b64uEnc(`${prefix}:${ch.id}`)}`,
+        type: 'tv',
+        name: epg.current.title,
+        poster: ch.art || ch.logo || NOW_FALL('300x450'),
+        background: ch.art || ch.logo || NOW_FALL('1280x720'),
+        logo: ch.logo || undefined,
+        description: parts.join('\n'),
+        genres: ch.group ? [ch.group] : [],
+        posterShape: prov === 'rakuten' ? 'poster' : 'square',
+        behaviorHints: { defaultsRecommended: true }
+      });
+    }
+  }
+
+  out.sort((a, b) => a.name.localeCompare(b.name, 'it'));
+  return out.slice(0, 300);
+}
+
+async function buildNowMetas(search) {
+  let list = await buildNowList();
+  if (search) {
+    const s = String(search).toLowerCase();
+    list = list.filter(m => m.name.toLowerCase().includes(s) || m.description.toLowerCase().includes(s));
+  }
+  return list;
+}
+
+async function buildNowMeta(payloadId) {
+  let fullId;
+  try { fullId = fast.b64uDec(payloadId); } catch (e) { return null; }
+  const list = await buildNowList();
+  return list.find(m => m.id === `${NOW_PREFIX}:${fast.b64uEnc(fullId)}`) || null;
+}
+
 function sendJson(res, obj, status = 200) {
   const body = JSON.stringify(obj);
   res.writeHead(status, {
@@ -58,7 +147,7 @@ async function buildManifest() {
     logo: 'https://i.imgur.com/miRBJ2B.png',
     background: 'https://raw.githubusercontent.com/qwertyuiop8899/StreamViX/refs/heads/main/public/backround.png',
     types: ['tv'],
-    idPrefixes: [catalogs.ID_PREFIX, fast.PLUTO_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX, fast.RAKUTEN_PREFIX],
+    idPrefixes: [catalogs.ID_PREFIX, NOW_PREFIX, fast.PLUTO_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX, fast.RAKUTEN_PREFIX],
     resources: ['catalog', 'meta', 'stream'],
     catalogs: [
       {
@@ -75,6 +164,12 @@ async function buildManifest() {
         type: 'tv',
         name: '\uD83D\uDD0E Cerca canale / programma',
         extra: [{ name: 'search', isRequired: true }]
+      },
+      {
+        id: 'now_epg',
+        type: 'tv',
+        name: '\uD83D\uDCFA In onda ora',
+        extra: [{ name: 'search', isRequired: false }]
       },
       {
         id: fast.CATALOG_PLUTO,
@@ -213,6 +308,8 @@ async function handleRequest(req, res) {
           list = list.filter(m => m.name.toLowerCase().includes(s));
         }
         metas = list;
+      } else if (catalogId === 'now_epg') {
+        metas = await buildNowMetas(search);
       } else if (catalogId === sport.CATALOG_ID) {
         metas = await sport.catalogMetas(search);
       } else {
@@ -253,7 +350,9 @@ async function handleRequest(req, res) {
       const type = segments[1];
       const id = segments.slice(2).join('/').replace(/\.json$/i, '');
       let meta;
-      if (id.startsWith(fast.PLUTO_PREFIX + ':') || id.startsWith(fast.SAMSUNG_PREFIX + ':') || id.startsWith(fast.RAKUTEN_PREFIX + ':')) {
+      if (id.startsWith(NOW_PREFIX + ':')) {
+        meta = await buildNowMeta(id.slice(NOW_PREFIX.length + 1));
+      } else if (id.startsWith(fast.PLUTO_PREFIX + ':') || id.startsWith(fast.SAMSUNG_PREFIX + ':') || id.startsWith(fast.RAKUTEN_PREFIX + ':')) {
         meta = await fast.metaById(id);
       } else if (id.startsWith(sport.PREFIX + ':')) {
         meta = await sport.metaById(id);
@@ -272,7 +371,16 @@ async function handleRequest(req, res) {
       const sproto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
       const sbase = `${sproto}://${req.headers.host}`;
       let streams;
-      if (id.startsWith(sport.PREFIX + ':')) {
+      if (id.startsWith(NOW_PREFIX + ':')) {
+        let fullId;
+        try { fullId = fast.b64uDec(id.slice(NOW_PREFIX.length + 1)); } catch (e) { fullId = null; }
+        if (!fullId) return sendJson(res, { streams: [] });
+        if (fullId.startsWith(catalogs.ID_PREFIX + ':')) {
+          streams = await catalogs.getStreams(fullId, clientIp);
+        } else {
+          streams = await fast.streamsById(fullId, clientIp, sbase);
+        }
+      } else if (id.startsWith(sport.PREFIX + ':')) {
         const sgtId = id.slice(sport.PREFIX.length + 1);
         const key = await sport.resolveChannelKey(sgtId);
         streams = key ? await catalogs.getStreams(key, clientIp) : [];
