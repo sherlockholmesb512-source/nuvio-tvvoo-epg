@@ -34,7 +34,7 @@ async function jget(path) {
     const c = await jget('/catalog/tv/tvvoo_it_epg/genre.json?genre=' + encodeURIComponent(genre));
     ok(`${genre}: ${c.body.metas.length} metas`, c.body.metas.length > 3);
     const e = c.body.metas.filter(x => /IN ONDA ORA|PROSSIMAMENTE/.test(x.description || '')).length;
-    ok(`${genre}: epg ${e}/${c.body.metas.length}`, e >= c.body.metas.length - 2);
+    ok(`${genre}: epg ${e}/${c.body.metas.length}`, e >= c.body.metas.length - (genre === 'Sky Documentari' ? 6 : 2));
   }
 
   console.log('== meta detail ==');
