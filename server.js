@@ -47,6 +47,7 @@ function clientIpFrom(req) {
 
 async function buildManifest() {
   const genres = catalogs.genreOptions();
+  const plutoGenres = await fast.genreOptions('pluto');
   const samsungGenres = await fast.genreOptions('samsung');
   const rakutenGenres = await fast.genreOptions('rakuten');
   return {
@@ -57,7 +58,7 @@ async function buildManifest() {
     logo: 'https://i.imgur.com/miRBJ2B.png',
     background: 'https://raw.githubusercontent.com/qwertyuiop8899/StreamViX/refs/heads/main/public/backround.png',
     types: ['tv'],
-    idPrefixes: [catalogs.ID_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX, fast.RAKUTEN_PREFIX],
+    idPrefixes: [catalogs.ID_PREFIX, fast.PLUTO_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX, fast.RAKUTEN_PREFIX],
     resources: ['catalog', 'meta', 'stream'],
     catalogs: [
       {
@@ -74,6 +75,15 @@ async function buildManifest() {
         type: 'tv',
         name: '\uD83D\uDD0E Cerca canale / programma',
         extra: [{ name: 'search', isRequired: true }]
+      },
+      {
+        id: fast.CATALOG_PLUTO,
+        type: 'tv',
+        name: 'Pluto TV',
+        extra: [
+          { name: 'genre', options: plutoGenres, isRequired: false },
+          { name: 'search', isRequired: false }
+        ]
       },
       {
         id: fast.CATALOG_SAMSUNG,
@@ -244,13 +254,15 @@ async function handleRequest(req, res) {
     if (segments[0] === 'stream') {
       const type = segments[1];
       const id = segments.slice(2).join('/').replace(/\.json$/i, '');
+      const sproto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
+      const sbase = `${sproto}://${req.headers.host}`;
       let streams;
       if (id.startsWith(sport.PREFIX + ':')) {
         const sgtId = id.slice(sport.PREFIX.length + 1);
         const key = await sport.resolveChannelKey(sgtId);
         streams = key ? await catalogs.getStreams(key, clientIp) : [];
       } else if (id.startsWith(fast.PLUTO_PREFIX + ':') || id.startsWith(fast.SAMSUNG_PREFIX + ':') || id.startsWith(fast.RAKUTEN_PREFIX + ':')) {
-        streams = await fast.streamsById(id);
+        streams = await fast.streamsById(id, clientIp, sbase);
       } else if (id.startsWith(fast.EXTRA_PREFIX + ':')) {
         streams = await catalogs.extraStreams(id, clientIp);
       } else {
