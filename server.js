@@ -218,12 +218,13 @@ async function handleRequest(req, res) {
       } else {
         metas = await catalogs.getCatalogMetas(genre, search);
         if (/documentari/i.test(String(genre || ''))) {
-          const [samDoc, rakDoc] = await Promise.all([
+          const [samDoc, rakDoc, pluDoc] = await Promise.all([
             fast.catalogMetas('samsung', 'Documentari', search),
-            fast.catalogMetas('rakuten', 'Documentari', search)
+            fast.catalogMetas('rakuten', 'Documentari', search),
+            fast.catalogMetas('pluto', 'Documentari', search)
           ]);
           const seen = new Set(metas.map(m => m.id));
-          for (const m of [...(samDoc || []), ...(rakDoc || [])]) {
+          for (const m of [...(samDoc || []), ...(rakDoc || []), ...(pluDoc || [])]) {
             if (!seen.has(m.id)) { metas.push(m); seen.add(m.id); }
           }
         }
