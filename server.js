@@ -25,6 +25,20 @@ function nowNorm(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 }
 
+const NOW_GENRES = ['Tutti', 'Film', 'Serie TV', 'Sport', 'Documentari', 'Bambini', 'Intrattenimento', 'News', 'Musica', 'Altro'];
+function nowGenre(s) {
+  const t = String(s || '').toLowerCase();
+  if (/film|cinema|movie/.test(t)) return 'Film';
+  if (/serie|fiction|telefilm|drama|sitcom/.test(t)) return 'Serie TV';
+  if (/sport|calcio/.test(t)) return 'Sport';
+  if (/documentar|docu|natura|storia|scienza|nature|history/.test(t)) return 'Documentari';
+  if (/bambini|kids|cartoon|animazione|junior|anime/.test(t)) return 'Bambini';
+  if (/intratteniment|entertainment|reality|comedy|talk/.test(t)) return 'Intrattenimento';
+  if (/news|notiziario|informazione|cronaca/.test(t)) return 'News';
+  if (/music/.test(t)) return 'Musica';
+  return 'Altro';
+}
+
 async function buildNowList() {
   const { fmtRome } = require('./lib/util');
   const out = [];
@@ -51,7 +65,7 @@ async function buildNowList() {
         background: cur.image || c.logo || NOW_FALL('1280x720'),
         logo: c.logo || undefined,
         description: parts.join('\n'),
-        genres: cur.category ? [cur.category] : [],
+        genres: [nowGenre(cur.category)],
         behaviorHints: { defaultsRecommended: true }
       });
     }
@@ -81,7 +95,7 @@ async function buildNowList() {
         background: ch.art || ch.logo || NOW_FALL('1280x720'),
         logo: ch.logo || undefined,
         description: parts.join('\n'),
-        genres: ch.group ? [ch.group] : [],
+        genres: [nowGenre(ch.group)],
         posterShape: prov === 'rakuten' ? 'poster' : 'square',
         behaviorHints: { defaultsRecommended: true }
       });
@@ -169,7 +183,10 @@ async function buildManifest() {
         id: 'now_epg',
         type: 'tv',
         name: '\uD83D\uDCFA In onda ora',
-        extra: [{ name: 'search', isRequired: false }]
+        extra: [
+          { name: 'genre', isRequired: false, options: NOW_GENRES },
+          { name: 'search', isRequired: false }
+        ]
       },
       {
         id: fast.CATALOG_PLUTO,
@@ -310,6 +327,7 @@ async function handleRequest(req, res) {
         metas = list;
       } else if (catalogId === 'now_epg') {
         metas = await buildNowMetas(search);
+        if (genre && genre !== 'Tutti') metas = metas.filter(m => m.genres.includes(genre));
       } else if (catalogId === sport.CATALOG_ID) {
         metas = await sport.catalogMetas(search);
       } else {
