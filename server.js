@@ -277,35 +277,53 @@ async function handleRequest(req, res) {
       try { up = fast.b64uDec(segments[1]); } catch (e) { return sendError(res, 400, 'bad token'); }
       if (!/^https:\/\//i.test(up)) return sendError(res, 400, 'bad upstream');
       const isPlaylistUp = /\.m3u8(\?|$)/i.test(up);
-      const fwdHeaders = {};
-      if (req.headers.range && !isPlaylistUp) fwdHeaders.range = req.headers.range;
-      const r = await fetchWithTimeout(up, { headers: fwdHeaders }, 30000);
-      if (!r.ok && r.status !== 206) return sendError(res, 502, `upstream ${r.status}`);
+      const isStitcherMaster = isPlaylistUp && /\/stitch\/hls\/channel\/[^/]+\/master\.m3u8/i.test(up);
       const proto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
       const base = `${proto}://${req.headers.host}`;
-      const isPlaylist = isPlaylistUp || /mpegurl/i.test(r.headers.get('content-type') || '');
-      if (isPlaylist) {
-        const txt = await r.text();
-        res.writeHead(200, {
-          'Content-Type': 'application/vnd.apple.mpegurl',
-          'Cache-Control': 'no-store',
-          'Access-Control-Allow-Origin': '*'
-        });
-        return res.end(fast.rewriteM3U8(txt, up, base));
-      }
-      const buf = Buffer.from(await r.arrayBuffer());
-      const hdrs = {
-        'Content-Type': r.headers.get('content-type') || 'application/octet-stream',
-        'Cache-Control': r.headers.get('cache-control') || 'no-store',
-        'Access-Control-Allow-Origin': '*',
-        'Accept-Ranges': 'bytes',
-        'Content-Length': String(buf.length)
+
+      const fetchPlaylist = async () => {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          let r;
+          if (isStitcherMaster) {
+            r = await ppMutex(() => fetchWithTimeout(up, {}, 30000));
+          } else {
+            const fwdHeaders = {};
+            if (req.headers.range) fwdHeaders.range = req.headers.range;
+            r = await fetchWithTimeout(up, { headers: fwdHeaders }, 30000);
+          }
+          if (!r.ok && r.status !== 206) {
+            if (attempt < 3 && isStitcherMaster) { await new Promise(z => setTimeout(z, 800)); continue; }
+            return sendError(res, 502, `upstream ${r.status}`);
+          }
+          if (isPlaylistUp || /mpegurl/i.test(r.headers.get('content-type') || '')) {
+            const txt = await r.text();
+            if (!txt.startsWith('#EXTM3U')) {
+              if (attempt < 3 && isStitcherMaster) { await new Promise(z => setTimeout(z, 900)); continue; }
+              return sendError(res, 502, 'upstream bad playlist');
+            }
+            res.writeHead(200, {
+              'Content-Type': 'application/vnd.apple.mpegurl',
+              'Cache-Control': 'no-store',
+              'Access-Control-Allow-Origin': '*'
+            });
+            return res.end(fast.rewriteM3U8(txt, up, base));
+          }
+          const buf = Buffer.from(await r.arrayBuffer());
+          const hdrs = {
+            'Content-Type': r.headers.get('content-type') || 'application/octet-stream',
+            'Cache-Control': r.headers.get('cache-control') || 'no-store',
+            'Access-Control-Allow-Origin': '*',
+            'Accept-Ranges': 'bytes',
+            'Content-Length': String(buf.length)
+          };
+          if (r.status === 206) {
+            hdrs['Content-Range'] = r.headers.get('content-range') || `bytes 0-${buf.length - 1}/*`;
+          }
+          res.writeHead(r.status === 206 ? 206 : 200, hdrs);
+          return res.end(req.method === 'HEAD' ? undefined : buf);
+        }
       };
-      if (r.status === 206) {
-        hdrs['Content-Range'] = r.headers.get('content-range') || `bytes 0-${buf.length - 1}/*`;
-      }
-      res.writeHead(r.status === 206 ? 206 : 200, hdrs);
-      return res.end(req.method === 'HEAD' ? undefined : buf);
+      return fetchPlaylist();
     }
 
     sendError(res, 404, 'not found');
@@ -316,6 +334,15 @@ async function handleRequest(req, res) {
 }
 
 const server = http.createServer(handleRequest);
+
+const ppMutex = (() => {
+  let tail = Promise.resolve();
+  return fn => {
+    const p = tail.then(fn, fn);
+    tail = p.then(() => {}, () => {});
+    return p;
+  };
+})();
 
 server.listen(PORT, HOST, () => {
   console.log(`TvVoo Guide addon listening on http://${HOST}:${PORT}`);
