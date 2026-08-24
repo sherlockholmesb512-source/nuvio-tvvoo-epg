@@ -47,6 +47,9 @@ function clientIpFrom(req) {
 
 async function buildManifest() {
   const genres = catalogs.genreOptions();
+  const plutoGenres = await fast.genreOptions('pluto');
+  const samsungGenres = await fast.genreOptions('samsung');
+  const rakutenGenres = await fast.genreOptions('rakuten');
   return {
     id: ADDON_ID,
     version: pkg.version,
@@ -77,13 +80,19 @@ async function buildManifest() {
         id: fast.CATALOG_PLUTO,
         type: 'tv',
         name: 'Pluto TV',
-        extra: [{ name: 'search', isRequired: false }]
+        extra: [
+          { name: 'genre', options: plutoGenres, isRequired: false },
+          { name: 'search', isRequired: false }
+        ]
       },
       {
         id: fast.CATALOG_SAMSUNG,
         type: 'tv',
         name: 'Samsung TV Plus',
-        extra: [{ name: 'search', isRequired: false }]
+        extra: [
+          { name: 'genre', options: samsungGenres, isRequired: false },
+          { name: 'search', isRequired: false }
+        ]
       },
       {
         id: fast.CATALOG_EXTRA,
@@ -95,7 +104,10 @@ async function buildManifest() {
         id: fast.CATALOG_RAKUTEN,
         type: 'tv',
         name: 'Rakuten TV',
-        extra: [{ name: 'search', isRequired: false }]
+        extra: [
+          { name: 'genre', options: rakutenGenres, isRequired: false },
+          { name: 'search', isRequired: false }
+        ]
       }
     ],
     behaviorHints: {
