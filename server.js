@@ -271,6 +271,108 @@ async function handleRequest(req, res) {
       return sendJson(res, { streams });
     }
 
+    if (segments[0] === 'pluto' && segments[1]) {
+      const { fetchWithTimeout } = require('./lib/util');
+      const STITCHER = 'cfd-v4-service-channel-stitcher-use1-1.prd.pluto.tv';
+      const chId = segments[1];
+      const sub = segments.slice(2).join('/');
+      const pproto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
+      const segBase = `${pproto}://${req.headers.host}/pluto/${chId}/seg`;
+
+      const rewritePluto = (txt, upBase) => {
+        const out = [];
+        for (const raw of String(txt).split(/\r?\n/)) {
+          const line = raw.trim();
+          if (!line) continue;
+          if (line.startsWith('#')) {
+            out.push(line.replace(/URI="([^"]+)"/g, (m, u) => {
+              try { return `URI="${segBase}?u=${fast.b64uEnc(new URL(u, upBase).href)}"`; } catch (e) { return m; }
+            }));
+          } else {
+            try { out.push(`${segBase}?u=${fast.b64uEnc(new URL(line, upBase).href)}`); }
+            catch (e) { out.push(line); }
+          }
+        }
+        return out.join('\n') + '\n';
+      };
+
+      if (sub === 'master.m3u8' || sub === '') {
+        let txt = null;
+        let up = null;
+        for (let i = 0; i < 2 && !txt; i++) {
+          try {
+            const s = await fast.getPlutoStitcherParams(chId);
+            up = `https://${STITCHER}/v2/stitch/hls/channel/${chId}/master.m3u8?${fast.plutoQuery(s, true)}`;
+            const r = await ppMutex(() => fetchWithTimeout(up, {}, 30000));
+            if (r.ok) {
+              const t = await r.text();
+              if (t.startsWith('#EXTM3U')) txt = t;
+            }
+          } catch (e) { /* retry con sessione nuova */ }
+          if (!txt) fast.dropPlutoStitcherParams(chId);
+        }
+        if (!txt) return sendError(res, 502, 'pluto stitcher');
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Cache-Control': 'no-store',
+          'Access-Control-Allow-Origin': '*'
+        });
+        return res.end(rewritePluto(txt, up));
+      }
+
+      if (sub === 'seg') {
+        let target;
+        try { target = fast.b64uDec(u.searchParams.get('u') || ''); } catch (e) { return sendError(res, 400, 'bad u'); }
+        if (!/^https:\/\//i.test(target)) return sendError(res, 400, 'bad u');
+        let isStitchM3u8 = false;
+        try { isStitchM3u8 = /(^|\.)pluto\.tv$/i.test(new URL(target).host) && /\.m3u8(\?|$)/i.test(target); } catch (e) { /* noop */ }
+
+        if (isStitchM3u8) {
+          let txt = null;
+          let lastUp = target.split('?')[0];
+          for (let i = 0; i < 2 && !txt; i++) {
+            try {
+              const s = await fast.getPlutoStitcherParams(chId);
+              const rebuilt = `https://${STITCHER}${new URL(lastUp).pathname}?${fast.plutoQuery(s, false)}`;
+              const r = await ppMutex(() => fetchWithTimeout(rebuilt, {}, 30000));
+              if (r.ok) {
+                const t = await r.text();
+                if (t.startsWith('#EXTM3U')) txt = t;
+              }
+            } catch (e) { /* retry con sessione nuova */ }
+            if (!txt) fast.dropPlutoStitcherParams(chId);
+          }
+          if (!txt) return sendError(res, 502, 'pluto media');
+          res.writeHead(200, {
+            'Content-Type': 'application/vnd.apple.mpegurl',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*'
+          });
+          return res.end(rewritePluto(txt, lastUp));
+        }
+
+        const fwdHeaders = {};
+        if (req.headers.range) fwdHeaders.range = req.headers.range;
+        let r;
+        try { r = await fetchWithTimeout(target, { headers: fwdHeaders }, 30000); }
+        catch (e) { return sendError(res, 504, 'upstream timeout'); }
+        if (!r.ok && r.status !== 206) return sendError(res, 502, `upstream ${r.status}`);
+        const buf = Buffer.from(await r.arrayBuffer());
+        const hdrs = {
+          'Content-Type': r.headers.get('content-type') || 'application/octet-stream',
+          'Cache-Control': r.headers.get('cache-control') || 'no-store',
+          'Access-Control-Allow-Origin': '*',
+          'Accept-Ranges': 'bytes',
+          'Content-Length': String(buf.length)
+        };
+        if (r.status === 206) hdrs['Content-Range'] = r.headers.get('content-range') || `bytes 0-${buf.length - 1}/*`;
+        res.writeHead(r.status === 206 ? 206 : 200, hdrs);
+        return res.end(req.method === 'HEAD' ? undefined : buf);
+      }
+
+      return sendError(res, 404, 'not found');
+    }
+
     if (segments[0] === 'pp' && segments[1]) {
       const { fetchWithTimeout } = require('./lib/util');
       let up;
