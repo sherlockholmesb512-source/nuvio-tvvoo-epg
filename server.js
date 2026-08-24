@@ -25,7 +25,7 @@ function nowNorm(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 }
 
-const NOW_GENRES = ['Tutti', 'Sky', 'Film', 'Serie TV', 'Sport', 'Documentari', 'Bambini', 'Intrattenimento', 'News', 'Musica', 'Altro'];
+const NOW_GENRES = ['Tutti', 'Sky', 'Digitale Terrestre', 'Film', 'Serie TV', 'Sport', 'Documentari', 'Bambini', 'Intrattenimento', 'News', 'Musica', 'Altro'];
 function nowGenre(s) {
   const t = String(s || '').toLowerCase();
   if (/film|cinema|movie/.test(t)) return 'Film';
@@ -37,6 +37,16 @@ function nowGenre(s) {
   if (/news|notiziario|informazione|cronaca/.test(t)) return 'News';
   if (/music/.test(t)) return 'Musica';
   return 'Altro';
+}
+
+const NOW_SKY_EXTRA_RE = /\bhistory\b|\bdiscovery\b|\bdazn\b/i;
+const NOW_DTT_PREFIX_RE = /^(?:cielo|focus|giallo|k ?2|nove|iris|frisbee|boing|cartoonito|super\s*!|real time|dmax|tv ?8)\b/i;
+const NOW_DTT_ANY_RE = /\brai\b|\brai ?\d|canale ?5|italia ?1|rete ?4|\bla ?7\b|\bla ?5\b|\bla ?6\b|top crime|mediaset|\btwenty\b/i;
+function nowChannelGroups(name) {
+  const groups = [];
+  if (/\bsky\b/i.test(name) || NOW_SKY_EXTRA_RE.test(name)) groups.push('Sky');
+  if (NOW_DTT_PREFIX_RE.test(name.trim()) || NOW_DTT_ANY_RE.test(name)) groups.push('Digitale Terrestre');
+  return groups;
 }
 
 const NOW_TTL = 5 * 60 * 1000;
@@ -64,7 +74,7 @@ async function buildNowList() {
         parts.push(`PROSSIMO: ${c.epg.next.title}${c.epg.next.start ? ' (' + fmtRome(c.epg.next.start) + ')' : ''}`);
       }
       const genres = [nowGenre(cur.category)];
-      if (/\bsky\b/i.test(c.name)) genres.push('Sky');
+      genres.push(...nowChannelGroups(c.name));
       out.push({
         id: `${NOW_PREFIX}:${fast.b64uEnc(catalogs.idFromName(c.name))}`,
         type: 'tv',
@@ -97,7 +107,7 @@ async function buildNowList() {
       const prefix = prov === 'pluto' ? fast.PLUTO_PREFIX : prov === 'samsung' ? fast.SAMSUNG_PREFIX : fast.RAKUTEN_PREFIX;
       const progImg = epg.current.imageIso || null;
       const genres = [nowGenre(ch.group)];
-      if (/\bsky\b/i.test(ch.name)) genres.push('Sky');
+      genres.push(...nowChannelGroups(ch.name));
       out.push({
         id: `${NOW_PREFIX}:${fast.b64uEnc(`${prefix}:${ch.id}`)}`,
         type: 'tv',
