@@ -65,8 +65,10 @@ async function buildNowList() {
     for (const c of uni.channels) {
       const cur = c.epg && c.epg.current;
       if (!cur || !cur.title) continue;
-      const k = nowNorm(cur.title);
-      if (!k || seenTitle.has(k)) continue;
+      const nt = nowNorm(cur.title);
+      if (!nt) continue;
+      const k = nt + '|vavoo';
+      if (seenTitle.has(k)) continue;
       seenTitle.add(k);
       const parts = [`In onda su ${c.name}`];
       if (cur.end) parts.push(`Fino alle ${fmtRome(cur.end)}`);
@@ -96,8 +98,10 @@ async function buildNowList() {
       let epg;
       try { epg = await fast.chEpg(ch); } catch (e) { continue; }
       if (!epg.current || !epg.current.title) continue;
-      const k = nowNorm(epg.current.title);
-      if (!k || seenTitle.has(k)) continue;
+      const nt = nowNorm(epg.current.title);
+      if (!nt) continue;
+      const k = nt + '|' + prov;
+      if (seenTitle.has(k)) continue;
       seenTitle.add(k);
       const when = p => (!p ? '' : typeof p.start === 'number' ? fast.fmtEpoch(p.start) : String(fmtRome(p.startIso || p.start) || ''));
       const parts = [`In onda su ${ch.name}`];
@@ -124,7 +128,7 @@ async function buildNowList() {
   }
 
   out.sort((a, b) => a.name.localeCompare(b.name, 'it'));
-  const capped = out.slice(0, 300);
+  const capped = out.slice(0, 800);
   nowListCache = { at: Date.now(), list: capped };
   return capped;
 }
