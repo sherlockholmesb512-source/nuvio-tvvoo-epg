@@ -98,7 +98,10 @@ async function buildManifest() {
         id: fast.CATALOG_EXTRA,
         type: 'tv',
         name: 'Extra & Svizzera',
-        extra: [{ name: 'search', isRequired: false }]
+        extra: [
+          { name: 'genre', options: ['Tutti'], isRequired: false },
+          { name: 'search', isRequired: false }
+        ]
       },
       {
         id: fast.CATALOG_RAKUTEN,
