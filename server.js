@@ -329,7 +329,7 @@ async function handleRequest(req, res) {
 
     if (segments[0] === 'catalog') {
       const type = segments[1];
-      const catalogId = segments[2];
+      const catalogId = (segments[2] || '').replace(/\.json$/i, '');
       let extraStr = segments.slice(3).join('/');
       extraStr = extraStr.replace(/\.json$/i, '');
 
