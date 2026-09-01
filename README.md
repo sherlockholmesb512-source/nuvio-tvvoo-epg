@@ -7,7 +7,6 @@ Add-on standalone per **Nuvio** (protocollo Stremio): canali TV italiani VAVOO c
 - **🔎 Cerca** — ricerca canale/programma
 - **Samsung TV Plus** — canali FAST con categorie ed EPG
 - **Extra & Svizzera** — RSI LA1/LA2 e canali extra
-- **Rakuten TV** — canali FAST Rakuten con categorie italiane
 
 ## URL manifest
 ```
