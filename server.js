@@ -11,6 +11,7 @@ const guidatv = require('./lib/guidatv');
 const m3u = require('./lib/m3u');
 const fast = require('./lib/fast');
 const sport = require('./lib/sport');
+const plex = require('./lib/plex');
 const logger = require('./lib/log');
 
 const PORT = process.env.PORT || 7000;
@@ -178,6 +179,7 @@ async function buildManifest() {
   const genres = catalogs.genreOptions();
   const plutoGenres = await fast.genreOptions('pluto');
   const samsungGenres = await fast.genreOptions('samsung');
+  const plexGenres = plex.isEnabled() ? plex.genreOptions() : ['Tutti'];
   return {
     id: ADDON_ID,
     version: pkg.version,
@@ -186,7 +188,7 @@ async function buildManifest() {
     logo: 'https://i.imgur.com/miRBJ2B.png',
     background: 'https://raw.githubusercontent.com/qwertyuiop8899/StreamViX/refs/heads/main/public/backround.png',
     types: ['tv'],
-    idPrefixes: [catalogs.ID_PREFIX, NOW_PREFIX, fast.PLUTO_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX],
+    idPrefixes: [catalogs.ID_PREFIX, NOW_PREFIX, fast.PLUTO_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX, plex.PLEX_PREFIX],
     resources: ['catalog', 'meta', 'stream'],
     catalogs: [
       {
@@ -239,7 +241,16 @@ async function buildManifest() {
           { name: 'genre', options: ['Tutti'], isRequired: false },
           { name: 'search', isRequired: false }
         ]
-      }
+      },
+      ...(plex.isEnabled() ? [{
+        id: plex.CATALOG_PLEX,
+        type: 'tv',
+        name: 'Plex Live TV',
+        extra: [
+          { name: 'genre', options: plexGenres, isRequired: false },
+          { name: 'search', isRequired: false }
+        ]
+      }] : [])
     ],
     behaviorHints: {
       configurable: true,
@@ -339,6 +350,8 @@ async function handleRequest(req, res) {
           list = list.filter(m => m.name.toLowerCase().includes(s));
         }
         metas = list;
+      } else if (catalogId === plex.CATALOG_PLEX) {
+        metas = await plex.plexMetas(search);
       } else if (catalogId === 'now_epg') {
         metas = await buildNowMetas(search);
         if (genre && genre !== 'Tutti') metas = metas.filter(m => m.genres.includes(genre));
@@ -388,6 +401,8 @@ async function handleRequest(req, res) {
         meta = await sport.metaById(id);
       } else if (id.startsWith(fast.EXTRA_PREFIX + ':')) {
         meta = await catalogs.extraMeta(id);
+      } else if (id.startsWith(plex.PLEX_PREFIX + ':')) {
+        meta = await plex.plexMeta(id);
       } else {
         meta = await catalogs.getMeta(id);
       }
@@ -418,6 +433,8 @@ async function handleRequest(req, res) {
         streams = await fast.streamsById(id, clientIp, sbase);
       } else if (id.startsWith(fast.EXTRA_PREFIX + ':')) {
         streams = await catalogs.extraStreams(id, clientIp);
+      } else if (id.startsWith(plex.PLEX_PREFIX + ':')) {
+        streams = await plex.plexStreams(id);
       } else {
         streams = await catalogs.getStreams(id, clientIp);
       }
@@ -621,6 +638,7 @@ server.listen(PORT, HOST, () => {
       catalogs.flushDataCaches();
       guidatv.flushDataCaches();
       m3u.flushDataCaches();
+      plex.flushDataCaches();
       nowListCache = { at: 0, list: null };
       console.log('[cache] flushed all data caches');
       buildNowList().then(l => console.log('[cache] warm now list: ' + l.length)).catch(() => {});
