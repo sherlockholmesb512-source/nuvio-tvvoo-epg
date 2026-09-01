@@ -91,7 +91,7 @@ async function buildNowList() {
     }
   } catch (e) { /* opzionale */ }
 
-  for (const [prov, load] of [['pluto', fast.loadPluto], ['samsung', fast.loadSamsung], ['rakuten', fast.loadRakuten]]) {
+  for (const [prov, load] of [['pluto', fast.loadPluto], ['samsung', fast.loadSamsung]]) {
     let chans = [];
     try { chans = await load(); } catch (e) { continue; }
     for (const ch of chans) {
@@ -108,7 +108,7 @@ async function buildNowList() {
       const endStr = epg.next ? when(epg.next) : '';
       if (endStr) parts.push(`Fino alle ${endStr}`);
       if (epg.next && epg.next.title) parts.push(`PROSSIMO: ${epg.next.title}${endStr ? '' : endStr}`);
-      const prefix = prov === 'pluto' ? fast.PLUTO_PREFIX : prov === 'samsung' ? fast.SAMSUNG_PREFIX : fast.RAKUTEN_PREFIX;
+      const prefix = prov === 'pluto' ? fast.PLUTO_PREFIX : fast.SAMSUNG_PREFIX;
       const progImg = epg.current.imageIso || null;
       const genres = [nowGenre(ch.group)];
       genres.push(...nowChannelGroups(ch.name));
@@ -121,7 +121,6 @@ async function buildNowList() {
         logo: ch.logo || undefined,
         description: parts.join('\n'),
         genres,
-        posterShape: prov === 'rakuten' ? 'poster' : 'square',
         behaviorHints: { defaultsRecommended: true }
       });
     }
@@ -179,7 +178,6 @@ async function buildManifest() {
   const genres = catalogs.genreOptions();
   const plutoGenres = await fast.genreOptions('pluto');
   const samsungGenres = await fast.genreOptions('samsung');
-  const rakutenGenres = await fast.genreOptions('rakuten');
   return {
     id: ADDON_ID,
     version: pkg.version,
@@ -188,7 +186,7 @@ async function buildManifest() {
     logo: 'https://i.imgur.com/miRBJ2B.png',
     background: 'https://raw.githubusercontent.com/qwertyuiop8899/StreamViX/refs/heads/main/public/backround.png',
     types: ['tv'],
-    idPrefixes: [catalogs.ID_PREFIX, NOW_PREFIX, fast.PLUTO_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX, fast.RAKUTEN_PREFIX],
+    idPrefixes: [catalogs.ID_PREFIX, NOW_PREFIX, fast.PLUTO_PREFIX, fast.SAMSUNG_PREFIX, fast.EXTRA_PREFIX],
     resources: ['catalog', 'meta', 'stream'],
     catalogs: [
       {
@@ -239,15 +237,6 @@ async function buildManifest() {
         name: 'Extra & Svizzera',
         extra: [
           { name: 'genre', options: ['Tutti'], isRequired: false },
-          { name: 'search', isRequired: false }
-        ]
-      },
-      {
-        id: fast.CATALOG_RAKUTEN,
-        type: 'tv',
-        name: 'Rakuten TV',
-        extra: [
-          { name: 'genre', options: rakutenGenres, isRequired: false },
           { name: 'search', isRequired: false }
         ]
       }
@@ -343,8 +332,6 @@ async function handleRequest(req, res) {
         metas = await fast.catalogMetas('pluto', genre, search);
       } else if (catalogId === fast.CATALOG_SAMSUNG) {
         metas = await fast.catalogMetas('samsung', genre, search);
-      } else if (catalogId === fast.CATALOG_RAKUTEN) {
-        metas = await fast.catalogMetas('rakuten', genre, search);
       } else if (catalogId === fast.CATALOG_EXTRA) {
         let list = await catalogs.extraMetas();
         if (search) {
@@ -367,22 +354,20 @@ async function handleRequest(req, res) {
           }
         };
         if (/documentari/i.test(g)) {
-          const [samDoc, rakDoc, pluDoc] = await Promise.all([
+          const [samDoc, pluDoc] = await Promise.all([
             fast.catalogMetas('samsung', 'Documentari', search),
-            fast.catalogMetas('rakuten', 'Documentari', search),
             fast.catalogMetas('pluto', 'Documentari', search)
           ]);
-          mergeExtra([samDoc, rakDoc, pluDoc]);
+          mergeExtra([samDoc, pluDoc]);
         }
         if (/bambini|kids|cartoon|junior/i.test(g)) {
-          const [pluAnim, pluBam, samAnim, samBam, rakBam] = await Promise.all([
+          const [pluAnim, pluBam, samAnim, samBam] = await Promise.all([
             fast.catalogMetas('pluto', 'Animazione', search),
             fast.catalogMetas('pluto', 'Bambini', search),
             fast.catalogMetas('samsung', 'Anime', search),
-            fast.catalogMetas('samsung', 'Bambini', search),
-            fast.catalogMetas('rakuten', 'Bambini', search)
+            fast.catalogMetas('samsung', 'Bambini', search)
           ]);
-          mergeExtra([pluAnim, pluBam, samAnim, samBam, rakBam]);
+          mergeExtra([pluAnim, pluBam, samAnim, samBam]);
         }
       }
       if (skip > 0 && Array.isArray(metas)) {
@@ -397,7 +382,7 @@ async function handleRequest(req, res) {
       let meta;
       if (id.startsWith(NOW_PREFIX + ':')) {
         meta = await buildNowMeta(id.slice(NOW_PREFIX.length + 1));
-      } else if (id.startsWith(fast.PLUTO_PREFIX + ':') || id.startsWith(fast.SAMSUNG_PREFIX + ':') || id.startsWith(fast.RAKUTEN_PREFIX + ':')) {
+      } else if (id.startsWith(fast.PLUTO_PREFIX + ':') || id.startsWith(fast.SAMSUNG_PREFIX + ':')) {
         meta = await fast.metaById(id);
       } else if (id.startsWith(sport.PREFIX + ':')) {
         meta = await sport.metaById(id);
@@ -429,7 +414,7 @@ async function handleRequest(req, res) {
         const sgtId = id.slice(sport.PREFIX.length + 1);
         const key = await sport.resolveChannelKey(sgtId);
         streams = key ? await catalogs.getStreams(key, clientIp) : [];
-      } else if (id.startsWith(fast.PLUTO_PREFIX + ':') || id.startsWith(fast.SAMSUNG_PREFIX + ':') || id.startsWith(fast.RAKUTEN_PREFIX + ':')) {
+      } else if (id.startsWith(fast.PLUTO_PREFIX + ':') || id.startsWith(fast.SAMSUNG_PREFIX + ':')) {
         streams = await fast.streamsById(id, clientIp, sbase);
       } else if (id.startsWith(fast.EXTRA_PREFIX + ':')) {
         streams = await catalogs.extraStreams(id, clientIp);
